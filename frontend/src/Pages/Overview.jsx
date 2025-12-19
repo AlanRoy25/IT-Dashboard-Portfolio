@@ -1,181 +1,311 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import Bell from "../components/BellIcon";
+import ReminderPanel from "../components/ReminderPanel";
+import TechNewsCard from "../components/TechNewsCard";
+import ApplicationProgress from "../components/ApplicationProgress";
+
+const API = "http://localhost:5000";
+
+
+
+const glowCard = (color = "#38BDF8") => ({
+  background: "#020617",
+  border: "1px solid #1E293B",
+  borderRadius: 16,
+  padding: 20,
+  transition: "all 0.25s ease",
+});
+
+const glowHover = color => ({
+  boxShadow: `0 0 35px ${color}55`,
+  borderColor: color,
+  transform: "translateY(-3px)",
+});
+
+
 
 export default function Overview() {
-  const navigate = useNavigate();
-
-  const [savedJobs, setSavedJobs] = useState([]);
   const [applications, setApplications] = useState([]);
-  const [latestNews, setLatestNews] = useState(null);
+  const [savedJobs, setSavedJobs] = useState([]);
+  const [showReminders, setShowReminders] = useState(false);
+  const [news, setNews] = useState([]);
 
   useEffect(() => {
-    fetch("http://localhost:5000/saved-jobs")
-      .then(res => res.json())
-      .then(data => setSavedJobs(Array.isArray(data) ? data : []));
-
-    fetch("http://localhost:5000/applications")
-      .then(res => res.json())
-      .then(data => setApplications(Array.isArray(data) ? data : []));
-
-    fetch("https://hn.algolia.com/api/v1/search?query=technology")
-      .then(res => res.json())
-      .then(data => setLatestNews(data.hits?.[0]));
+    loadData();
+    fetchTechNews();
   }, []);
 
-  const interviewCount = applications.filter(a => a.status === "Interview").length;
-  const lastSaved = savedJobs[savedJobs.length - 1];
-  const lastApplied = applications[applications.length - 1];
+  async function safeFetch(url) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return [];
+      return await res.json();
+    } catch {
+      return [];
+    }
+  }
+
+  async function loadData() {
+    setApplications(await safeFetch(`${API}/applications`));
+    setSavedJobs(await safeFetch(`${API}/saved-jobs`));
+  }
+
+  async function fetchTechNews() {
+    try {
+      const res = await fetch(
+        "https://dev.to/api/articles?tag=technology&top=1"
+      );
+      if (!res.ok) return;
+
+      const data = await res.json();
+      setNews([
+        {
+          title: data[0].title,
+          url: data[0].url,
+          image: data[0].cover_image || data[0].social_image,
+          source: data[0].user?.name || "Dev.to",
+        },
+      ]);
+    } catch {
+      setNews([]);
+    }
+  }
+
+  const reminders = applications
+    .filter(a => a.status === "Applied")
+    .slice(0, 3)
+    .map(a => ({ text: `📧 Follow up – ${a.company}` }));
+
+  const pendingSavedJobs = savedJobs.filter(
+    job =>
+      !applications.some(
+        app =>
+          app.company?.toLowerCase() === job.company?.toLowerCase()
+      )
+  );
+
+  const countByStatus = status =>
+    applications.filter(a => a.status === status).length;
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        padding: 28,
-        backgroundImage: "url('/assets/overviewbg.jpg')",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        position: "relative",
-        boxShadow: "inset 0 0 120px rgba(0,0,0,0.85)",
-      }}
-    >
-      {/* DARK + BLUR OVERLAY */}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          background:
-            "linear-gradient(180deg, rgba(2,6,23,0.96), rgba(2,6,23,0.99))",
-          backdropFilter: "blur(4px)",
-          zIndex: 0,
-        }}
-      />
-
-      {/* CONTENT */}
-      <div style={{ position: "relative", zIndex: 1 }}>
+    <div style={styles.page}>
+      <div style={styles.header}>
         <h1>Overview</h1>
-        <p style={{ color: "#94A3B8", marginBottom: 22 }}>
-          Quick snapshot of your job activity and updates.
-        </p>
+        <div style={{ position: "relative" }}>
+          <Bell
+            count={reminders.length}
+            onClick={() => setShowReminders(v => !v)}
+          />
+          {showReminders && <ReminderPanel reminders={reminders} />}
+        </div>
+      </div>
 
-        {/* SYSTEM STATUS */}
-        <div
-          style={{
-            fontSize: 12,
-            color: "#22D3EE",
-            letterSpacing: 1,
-            marginBottom: 28,
-          }}
-        >
+      
+      <div style={styles.sectionGrid}>
+        
+        <div style={styles.metricsGrid}>
+          <Metric label="Applied" value={countByStatus("Applied")} />
+          <Metric label="Interviews" value={countByStatus("Interview")} />
+          <Metric label="Offers" value={countByStatus("Offer")} />
+          <Metric label="Rejected" value={countByStatus("Rejected")} />
         </div>
 
-        {/* ACTION CARDS */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: 24,
-            marginBottom: 36,
-          }}
-        >
-          <ActionCard title="Browse Jobs" icon="💼" onClick={() => navigate("/jobs")} />
-          <ActionCard title="Saved Jobs" icon="⭐" onClick={() => navigate("/bookmarked")} />
-          <ActionCard title="Applications" icon="📄" onClick={() => navigate("/insights")} />
-          <ActionCard title="Tech News" icon="📰" onClick={() => navigate("/news")} />
-        </div>
+       
+        <ApplicationProgress applications={applications} />
 
-        {/* SUMMARY */}
-        <GlassCard>
-          <h3 style={{ marginBottom: 12 }}>Summary</h3>
-          <p style={{ color: "#94A3B8", lineHeight: 1.7 }}>
-            You have <strong>{savedJobs.length}</strong> saved jobs and{" "}
-            <strong>{applications.length}</strong> job applications.
-            {interviewCount > 0 && (
-              <> <strong>{interviewCount}</strong> interview in progress.</>
+       
+        <div style={styles.mainGrid}>
+          <GlowCard title="⏳ Saved Jobs – Action Needed">
+            {pendingSavedJobs.length === 0 && (
+              <Empty text="All saved jobs are applied 🎉" />
             )}
-          </p>
-        </GlassCard>
+            {pendingSavedJobs.slice(0, 3).map(job => (
+              <Row
+                key={job.id}
+                title={job.title}
+                subtitle={job.company}
+              />
+            ))}
+            {pendingSavedJobs.length > 0 && (
+              <a href="/bookmarked" style={styles.link}>
+                Apply now →
+              </a>
+            )}
+          </GlowCard>
 
-        {/* RECENT ACTIVITY */}
-        <GlassCard>
-          <h3 style={{ marginBottom: 16 }}>Recent Activity</h3>
+          <GlowCard title="Recent Activity">
+            {applications.slice(0, 4).map(app => (
+              <Row
+                key={app.id}
+                title={`${app.company} – ${app.role}`}
+                badge={app.status}
+                date={app.created_at}
+              />
+            ))}
+            {applications.length === 0 && (
+              <Empty text="No applications yet" />
+            )}
+          </GlowCard>
 
-          <ActivityItem
-            label="Last Saved Job"
-            value={
-              lastSaved
-                ? `${lastSaved.company} — ${lastSaved.title}`
-                : "No saved jobs yet"
-            }
-          />
+          <TechNewsCard news={news} />
 
-          <ActivityItem
-            label="Last Application"
-            value={
-              lastApplied
-                ? `${lastApplied.company} — ${lastApplied.role}`
-                : "No applications yet"
-            }
-          />
-
-          <ActivityItem
-            label="Latest Tech News"
-            value={latestNews ? latestNews.title : "No news loaded"}
-          />
-        </GlassCard>
+          <GlowCard title="Goals">
+            <p style={{ marginBottom: 10 }}>🎯 Monthly applications</p>
+            <Progress value={applications.length} max={20} />
+          </GlowCard>
+        </div>
       </div>
     </div>
   );
 }
 
-/* ---------- COMPONENTS ---------- */
 
-function ActionCard({ title, icon, onClick }) {
+
+function Metric({ label, value }) {
   return (
-    <div
-      onClick={onClick}
-      style={{
-        height: 130,
-        background: "rgba(2,6,23,0.82)",
-        border: "1px solid #1E293B",
-        borderRadius: 18,
-        padding: 20,
-        cursor: "pointer",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "flex-end",
-        boxShadow: "0 0 40px rgba(34,211,238,0.08)",
-        transition: "transform 0.2s ease, box-shadow 0.2s ease",
-      }}
-    >
-      <div style={{ fontSize: 26, marginBottom: 8 }}>{icon}</div>
-      <div style={{ fontWeight: 700 }}>{title}</div>
+    <div style={styles.metric}>
+      <div style={styles.metricValue}>{value}</div>
+      <div style={styles.metricLabel}>{label}</div>
     </div>
   );
 }
 
-function GlassCard({ children }) {
+function GlowCard({ title, children }) {
+  const [hover, setHover] = useState(false);
+
   return (
     <div
       style={{
-        background: "rgba(2,6,23,0.82)",
-        backdropFilter: "blur(10px)",
-        border: "1px solid #1E293B",
-        borderRadius: 18,
-        padding: 24,
-        marginBottom: 28,
-        boxShadow: "0 0 40px rgba(15,23,42,0.6)",
+        ...glowCard(),
+        ...(hover ? glowHover("#38BDF8") : {}),
       }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
     >
-      {children}
+      <h3 style={styles.cardTitle}>{title}</h3>
+      <div style={styles.cardBody}>{children}</div>
     </div>
   );
 }
 
-function ActivityItem({ label, value }) {
+function Row({ title, subtitle, badge, date }) {
   return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 13, color: "#64748B" }}>{label}</div>
-      <div style={{ color: "#E5E7EB" }}>{value}</div>
+    <div style={styles.row}>
+      <div>
+        <strong>{title}</strong>
+        {subtitle && <p style={styles.muted}>{subtitle}</p>}
+        {date && (
+          <p style={styles.date}>
+            📅 {new Date(date).toLocaleDateString()}
+          </p>
+        )}
+      </div>
+      {badge && <span style={styles.badge}>{badge}</span>}
     </div>
   );
 }
+
+function Progress({ value, max }) {
+  const percent = Math.min(100, (value / max) * 100);
+  return (
+    <div style={styles.progressBg}>
+      <div style={{ ...styles.progressFill, width: `${percent}%` }} />
+    </div>
+  );
+}
+
+function Empty({ text }) {
+  return <p style={styles.muted}>{text}</p>;
+}
+
+
+
+const styles = {
+  page: {
+    padding: 24,
+    background: "#020617",
+    color: "#E5E7EB",
+    minHeight: "100vh",
+  },
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  sectionGrid: {
+    display: "grid",
+    gap: 24,
+  },
+  metricsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 20,
+  },
+  metric: {
+    background: "#020617",
+    border: "1px solid #1E293B",
+    borderRadius: 16,
+    padding: 20,
+    textAlign: "center",
+  },
+  metricValue: {
+    fontSize: 32,
+    fontWeight: 700,
+  },
+  metricLabel: {
+    color: "#94A3B8",
+    marginTop: 6,
+  },
+  mainGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: 20,
+  },
+  cardTitle: {
+    marginBottom: 12,
+    fontSize: 16,
+    fontWeight: 600,
+  },
+  cardBody: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+  },
+  row: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  muted: {
+    color: "#94A3B8",
+    fontSize: 14,
+  },
+  date: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  badge: {
+    background: "#1E293B",
+    padding: "4px 10px",
+    borderRadius: 999,
+    fontSize: 12,
+  },
+  progressBg: {
+    height: 8,
+    background: "#1E293B",
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    background: "#38BDF8",
+  },
+  link: {
+    marginTop: 8,
+    color: "#38BDF8",
+    fontSize: 13,
+    textDecoration: "none",
+  },
+};

@@ -1,23 +1,46 @@
 import { useEffect, useState } from "react";
 
+const API = "http://localhost:5000";
+
+
+
+const glowCard = (color = "#38BDF8") => ({
+  background: "#020617",
+  border: "1px solid #1E293B",
+  borderRadius: 16,
+  padding: 20,
+  marginBottom: 16,
+  transition: "all 0.25s ease",
+  boxShadow: `0 0 18px ${color}22`,
+});
+
+const glowHover = color => ({
+  boxShadow: `0 0 40px ${color}55`,
+  borderColor: "#1E293B", // keep dark border
+  transform: "translateY(-3px)",
+});
+
+
 export default function Bookmarked() {
   const [jobs, setJobs] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [notes, setNotes] = useState("");
   const [tags, setTags] = useState("");
+  const [hoveredId, setHoveredId] = useState(null);
+
+  useEffect(() => {
+    loadJobs();
+  }, []);
 
   function loadJobs() {
-    fetch("http://localhost:5000/saved-jobs")
+    fetch(`${API}/saved-jobs`)
       .then(res => res.json())
-      .then(setJobs);
+      .then(data => setJobs(Array.isArray(data) ? data : []));
   }
 
-  useEffect(loadJobs, []);
-
-  async function deleteJob(id) {
-    await fetch(`http://localhost:5000/saved-jobs/${id}`, {
-      method: "DELETE",
-    });
+  async function removeJob(id) {
+    if (!window.confirm("Remove this bookmarked job?")) return;
+    await fetch(`${API}/saved-jobs/${id}`, { method: "DELETE" });
     loadJobs();
   }
 
@@ -28,7 +51,7 @@ export default function Bookmarked() {
   }
 
   async function saveEdit(id) {
-    await fetch(`http://localhost:5000/saved-jobs/${id}`, {
+    await fetch(`${API}/saved-jobs/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ notes, tags }),
@@ -39,53 +62,95 @@ export default function Bookmarked() {
   }
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={styles.page}>
       <h1>Bookmarked Jobs</h1>
+
+      {jobs.length === 0 && (
+        <p style={styles.muted}>No bookmarked jobs yet</p>
+      )}
 
       {jobs.map(job => (
         <div
           key={job.id}
+          onMouseEnter={() => setHoveredId(job.id)}
+          onMouseLeave={() => setHoveredId(null)}
           style={{
-            background: "#111827",
-            border: "1px solid #1F2937",
-            borderRadius: 10,
-            padding: 16,
-            marginBottom: 12,
+            ...glowCard(),
+            ...(hoveredId === job.id ? glowHover("#38BDF8") : {}),
           }}
         >
-          <h4>{job.title}</h4>
-          <p style={{ color: "#9CA3AF" }}>
-            {job.company} • {job.location}
-          </p>
+       
+          <div style={styles.cardHeader}>
+            <div>
+              <h3 style={styles.title}>{job.title}</h3>
+              <p style={styles.subtitle}>
+                {job.company} • {job.location}
+              </p>
+            </div>
 
+            <a
+              href={job.url}
+              target="_blank"
+              rel="noreferrer"
+              style={styles.applyBtn}
+            >
+              Apply
+            </a>
+          </div>
+
+          {/* BODY */}
           {editingId === job.id ? (
             <>
               <textarea
                 placeholder="Notes"
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
-                style={{ width: "100%", marginTop: 10 }}
+                style={styles.textarea}
               />
 
               <input
                 placeholder="Tags (comma separated)"
                 value={tags}
                 onChange={e => setTags(e.target.value)}
-                style={{ width: "100%", marginTop: 8 }}
+                style={styles.input}
               />
 
-              <button onClick={() => saveEdit(job.id)}>
+              <button
+                onClick={() => saveEdit(job.id)}
+                style={styles.saveBtn}
+              >
                 Save
               </button>
             </>
           ) : (
             <>
-              {job.notes && <p><strong>Notes:</strong> {job.notes}</p>}
-              {job.tags && <p><strong>Tags:</strong> {job.tags}</p>}
+              {job.tags && (
+                <div style={styles.tags}>
+                  {job.tags.split(",").map(t => (
+                    <span key={t} style={styles.tag}>
+                      {t.trim()}
+                    </span>
+                  ))}
+                </div>
+              )}
 
-              <div style={{ display: "flex", gap: 10 }}>
-                <button onClick={() => startEdit(job)}>Edit</button>
-                <button onClick={() => deleteJob(job.id)}>Remove</button>
+              {job.notes && (
+                <p style={styles.notes}>📝 {job.notes}</p>
+              )}
+
+              <div style={styles.actions}>
+                <button
+                  onClick={() => startEdit(job)}
+                  style={styles.linkBtn}
+                >
+                  ✏ Edit
+                </button>
+                <button
+                  onClick={() => removeJob(job.id)}
+                  style={styles.dangerBtn}
+                >
+                  🗑 Remove
+                </button>
               </div>
             </>
           )}
@@ -94,3 +159,102 @@ export default function Bookmarked() {
     </div>
   );
 }
+
+
+
+const styles = {
+  page: {
+    padding: 24,
+    background: "#020617",
+    minHeight: "100vh",
+    color: "#E5E7EB",
+  },
+  muted: {
+    color: "#94A3B8",
+  },
+  cardHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 12,
+  },
+  title: {
+    margin: 0,
+    fontSize: 18,
+  },
+  subtitle: {
+    color: "#94A3B8",
+    fontSize: 14,
+  },
+  applyBtn: {
+    background: "#22D3EE",
+    color: "#020617",
+    padding: "6px 12px",
+    borderRadius: 8,
+    textDecoration: "none",
+    fontSize: 13,
+    fontWeight: 600,
+  },
+  textarea: {
+    width: "100%",
+    minHeight: 60,
+    marginBottom: 8,
+    background: "#020617",
+    border: "1px solid #1E293B",
+    borderRadius: 8,
+    color: "#E5E7EB",
+    padding: 8,
+  },
+  input: {
+    width: "100%",
+    marginBottom: 8,
+    background: "#020617",
+    border: "1px solid #1E293B",
+    borderRadius: 8,
+    color: "#E5E7EB",
+    padding: 8,
+  },
+  saveBtn: {
+    background: "#22C55E",
+    border: "none",
+    padding: "6px 12px",
+    borderRadius: 8,
+    cursor: "pointer",
+    color: "#020617",
+    fontWeight: 600,
+  },
+  tags: {
+    display: "flex",
+    gap: 6,
+    marginBottom: 8,
+    flexWrap: "wrap",
+  },
+  tag: {
+    background: "#1E293B",
+    padding: "4px 8px",
+    borderRadius: 999,
+    fontSize: 12,
+  },
+  notes: {
+    fontSize: 14,
+    marginBottom: 10,
+  },
+  actions: {
+    display: "flex",
+    gap: 12,
+  },
+  linkBtn: {
+    background: "none",
+    border: "none",
+    color: "#38BDF8",
+    cursor: "pointer",
+    fontSize: 13,
+  },
+  dangerBtn: {
+    background: "none",
+    border: "none",
+    color: "#EF4444",
+    cursor: "pointer",
+    fontSize: 13,
+  },
+};

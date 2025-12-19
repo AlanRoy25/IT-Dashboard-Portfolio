@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from models import db, SavedJob, Application
 
+# Flask setup
 app = Flask(__name__)
 CORS(app)
 
@@ -14,11 +15,8 @@ with app.app_context():
     db.create_all()
 
 
-# -----------------------
-# SAVED JOBS (BOOKMARKS)
-# -----------------------
+# saved jobs routes
 
-# CREATE – bookmark job (no duplicates)
 @app.route("/saved-jobs", methods=["POST"])
 def save_job():
     data = request.json
@@ -26,8 +24,7 @@ def save_job():
     if not data or not data.get("url"):
         return jsonify({"error": "Invalid data"}), 400
 
-    existing = SavedJob.query.filter_by(url=data["url"]).first()
-    if existing:
+    if SavedJob.query.filter_by(url=data["url"]).first():
         return jsonify({"message": "Already bookmarked"}), 200
 
     job = SavedJob(
@@ -40,14 +37,11 @@ def save_job():
 
     db.session.add(job)
     db.session.commit()
-
     return jsonify({"message": "Job bookmarked"}), 201
 
 
-# READ – get all bookmarked jobs
 @app.route("/saved-jobs", methods=["GET"])
 def get_saved_jobs():
-    jobs = SavedJob.query.all()
     return jsonify([
         {
             "id": j.id,
@@ -58,56 +52,48 @@ def get_saved_jobs():
             "source": j.source,
             "notes": j.notes,
             "tags": j.tags,
+            "visibility": j.visibility,
         }
-        for j in jobs
+        for j in SavedJob.query.all()
     ])
 
 
-# 🔥 NEW: DELETE BY URL (UNBOOKMARK / TOGGLE SUPPORT)
 @app.route("/saved-jobs/by-url", methods=["DELETE"])
 def delete_job_by_url():
     data = request.json
+    job = SavedJob.query.filter_by(url=data.get("url")).first()
 
-    if not data or not data.get("url"):
-        return jsonify({"error": "URL required"}), 400
-
-    job = SavedJob.query.filter_by(url=data["url"]).first()
     if not job:
         return jsonify({"message": "Not bookmarked"}), 200
 
     db.session.delete(job)
     db.session.commit()
-
     return jsonify({"message": "Job unbookmarked"}), 200
 
 
-# UPDATE – notes & tags
 @app.route("/saved-jobs/<int:id>", methods=["PUT"])
-def update_job(id):
+def update_saved_job(id):
     job = SavedJob.query.get_or_404(id)
     data = request.json or {}
 
     job.notes = data.get("notes", job.notes)
     job.tags = data.get("tags", job.tags)
+    job.visibility = data.get("visibility", job.visibility)
 
     db.session.commit()
-    return jsonify({"message": "Job updated"})
+    return jsonify({"message": "Job updated"}), 200
 
 
-# DELETE – remove bookmark by ID (used in Bookmarked page)
 @app.route("/saved-jobs/<int:id>", methods=["DELETE"])
-def delete_job(id):
+def delete_saved_job(id):
     job = SavedJob.query.get_or_404(id)
     db.session.delete(job)
     db.session.commit()
-    return jsonify({"message": "Job removed"})
+    return jsonify({"message": "Job removed"}), 200
 
 
-# -----------------------
-# APPLICATION TRACKER
-# -----------------------
+# applications routes
 
-# CREATE application
 @app.route("/applications", methods=["POST"])
 def create_application():
     data = request.json
@@ -120,18 +106,16 @@ def create_application():
         role=data["role"],
         status=data.get("status", "Applied"),
         notes=data.get("notes"),
+        # applied_at is AUTO
     )
 
     db.session.add(app_item)
     db.session.commit()
-
     return jsonify({"message": "Application added"}), 201
 
 
-# READ applications
 @app.route("/applications", methods=["GET"])
 def get_applications():
-    apps = Application.query.all()
     return jsonify([
         {
             "id": a.id,
@@ -139,12 +123,13 @@ def get_applications():
             "role": a.role,
             "status": a.status,
             "notes": a.notes,
+            # ✅ SEND DATE TO FRONTEND
+            "applied_at": a.applied_at.isoformat() if a.applied_at else None,
         }
-        for a in apps
+        for a in Application.query.order_by(Application.applied_at.desc()).all()
     ])
 
 
-# UPDATE application
 @app.route("/applications/<int:id>", methods=["PUT"])
 def update_application(id):
     app_item = Application.query.get_or_404(id)
@@ -154,20 +139,18 @@ def update_application(id):
     app_item.notes = data.get("notes", app_item.notes)
 
     db.session.commit()
-    return jsonify({"message": "Application updated"})
+    return jsonify({"message": "Application updated"}), 200
 
 
-# DELETE application
 @app.route("/applications/<int:id>", methods=["DELETE"])
 def delete_application(id):
     app_item = Application.query.get_or_404(id)
     db.session.delete(app_item)
     db.session.commit()
-    return jsonify({"message": "Application removed"})
+    return jsonify({"message": "Application removed"}), 200
 
 
-# -----------------------
-# RUN SERVER (ALWAYS LAST)
-# -----------------------
+# server run
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

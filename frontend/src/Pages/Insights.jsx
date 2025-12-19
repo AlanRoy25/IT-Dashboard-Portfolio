@@ -1,6 +1,26 @@
 import { useEffect, useState } from "react";
 import StatusBoard from "../components/StatusBoard";
 
+const API = "http://localhost:5000";
+
+/* ---------- GLOW SYSTEM ---------- */
+
+const glowCard = (color = "#38BDF8") => ({
+  background: "#020617",
+  border: "1px solid #1E293B",
+  borderRadius: 16,
+  padding: 18,
+  transition: "all 0.25s ease",
+  boxShadow: `0 0 18px ${color}22`,
+});
+
+const glowHover = color => ({
+  boxShadow: `0 0 40px ${color}55`,
+  transform: "translateY(-3px)",
+});
+
+/* ---------- INPUT ---------- */
+
 const inputStyle = {
   background: "#020617",
   border: "1px solid #1E293B",
@@ -12,32 +32,35 @@ const inputStyle = {
 
 const statusMeta = [
   { label: "Applied", icon: "📄", color: "#38BDF8" },
-  { label: "Interview", icon: "🎤", color: "#FACC15" },
-  { label: "Offer", icon: "⭐", color: "#22C55E" },
-  { label: "Rejected", icon: "✖", color: "#EF4444" },
+  { label: "Interview", icon: "🎤", color: "#38BDF8" },
+  { label: "Offer", icon: "⭐", color: "#38BDF8" },
+  { label: "Rejected", icon: "✖", color: "#38BDF8" },
 ];
 
 export default function Insights() {
   const [applications, setApplications] = useState([]);
-
   const [company, setCompany] = useState("");
   const [role, setRole] = useState("");
   const [status, setStatus] = useState("Applied");
+  const [hovered, setHovered] = useState(null);
 
   useEffect(() => {
     fetchApplications();
   }, []);
 
-  function fetchApplications() {
-    fetch("http://localhost:5000/applications")
-      .then(res => res.json())
-      .then(data => setApplications(Array.isArray(data) ? data : []));
+  async function fetchApplications() {
+    try {
+      const res = await fetch(`${API}/applications`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setApplications(Array.isArray(data) ? data : []);
+    } catch {}
   }
 
   async function addApplication() {
     if (!company || !role) return;
 
-    await fetch("http://localhost:5000/applications", {
+    await fetch(`${API}/applications`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ company, role, status }),
@@ -49,26 +72,29 @@ export default function Insights() {
     fetchApplications();
   }
 
+  async function deleteApplication(id) {
+    if (!window.confirm("Mark this application as done and remove it?")) return;
+
+    await fetch(`${API}/applications/${id}`, {
+      method: "DELETE",
+    });
+
+    fetchApplications();
+  }
+
   return (
     <div style={{ padding: 24 }}>
-      <h1 style={{ letterSpacing: 1 }}>Application Insights</h1>
+      <h1>Application Insights</h1>
       <p style={{ color: "#94A3B8", marginBottom: 24 }}>
         Tracking job applications.
       </p>
-
-      {/* ADD APPLICATION (CRUD) */}
-      <div
+    <div
         style={{
-          background: "linear-gradient(145deg, #020617, #020617)",
-          border: "1px solid #1E293B",
-          borderRadius: 16,
-          padding: 20,
+          ...glowCard("#22D3EE"),
           marginBottom: 32,
           display: "grid",
           gridTemplateColumns: "2fr 2fr 1.5fr auto",
           gap: 16,
-          alignItems: "center",
-          boxShadow: "0 0 30px rgba(34,211,238,0.05)",
         }}
       >
         <input
@@ -106,14 +132,13 @@ export default function Insights() {
             padding: "12px 18px",
             fontWeight: 700,
             cursor: "pointer",
-            boxShadow: "0 0 20px rgba(34,211,238,0.35)",
           }}
         >
           + Add
         </button>
       </div>
 
-      {/* CYBERPUNK STATUS SUMMARY */}
+     
       <div
         style={{
           display: "grid",
@@ -130,25 +155,18 @@ export default function Insights() {
           return (
             <div
               key={s.label}
+              onMouseEnter={() => setHovered(s.label)}
+              onMouseLeave={() => setHovered(null)}
               style={{
-                background: "#020617",
-                border: "1px solid #1E293B",
-                borderRadius: 16,
-                padding: 18,
-                boxShadow: `0 0 25px ${s.color}20`,
+                ...glowCard(s.color),
+                ...(hovered === s.label ? glowHover(s.color) : {}),
               }}
             >
               <div style={{ fontSize: 22, fontWeight: 700 }}>
                 {s.icon} {count}
               </div>
 
-              <div
-                style={{
-                  color: "#94A3B8",
-                  fontSize: 14,
-                  marginBottom: 10,
-                }}
-              >
+              <div style={{ color: "#94A3B8", marginBottom: 10 }}>
                 {s.label}
               </div>
 
@@ -156,9 +174,8 @@ export default function Insights() {
                 style={{
                   height: 6,
                   background: "#020617",
-                  borderRadius: 6,
-                  overflow: "hidden",
                   border: "1px solid #1E293B",
+                  borderRadius: 6,
                 }}
               >
                 <div
@@ -166,7 +183,6 @@ export default function Insights() {
                     width: `${percent}%`,
                     height: "100%",
                     background: s.color,
-                    boxShadow: `0 0 10px ${s.color}`,
                   }}
                 />
               </div>
@@ -175,8 +191,10 @@ export default function Insights() {
         })}
       </div>
 
-      {/* STATUS BOARD */}
-      <StatusBoard applications={applications} />
+      <StatusBoard
+        applications={applications}
+        onDelete={deleteApplication}
+      />
     </div>
   );
 }

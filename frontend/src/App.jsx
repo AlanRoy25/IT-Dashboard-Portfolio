@@ -6,6 +6,7 @@ import TechNews from "./Pages/TechNews";
 import Jobs from "./Pages/Job";
 import Bookmarked from "./Pages/Bookmarked";
 import Insights from "./Pages/Insights";
+import Layout from "./components/Layout";
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="/jobs" element={<Jobs />} />
           <Route path="/bookmarked" element={<Bookmarked />} />
           <Route path="/insights" element={<Insights />} />
+          <Route path="/layout" element={<Layout />} />
         </Routes>
       </div>
     </div>
